@@ -117,7 +117,7 @@ internal class HookParser : RustPlugin
         public string? Name { get; set; }
         
         [JsonProperty("steamId")]
-        public ulong SteamId { get; set; }
+        public string SteamId { get; set; }
         
         [JsonProperty("ip")]
         public string? Ip { get; set; }
