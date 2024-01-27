@@ -158,7 +158,7 @@ internal class HookParser : RustPlugin
         [JsonProperty("player")]
         public TakaroPlayer? Player { get; set; }
 
-        [JsonProperty("message")]
+        [JsonProperty("msg")]
         public string? Message { get; set; }
 
         [JsonProperty("channel")]
