@@ -96,7 +96,7 @@ internal class HookParser : RustPlugin
     
     private void LogParsedJson(Hook hook)
     {
-        string stringifyJson = JsonConvert.SerializeObject(hook, Formatting.Indented);
+        string stringifyJson = JsonConvert.SerializeObject(hook, Formatting.None);
         Puts(stringifyJson);
     }
     #endregion
@@ -116,7 +116,7 @@ internal class HookParser : RustPlugin
         [JsonProperty("name")]
         public string? Name { get; set; }
         
-        [JsonProperty("steamid")]
+        [JsonProperty("steamId")]
         public ulong SteamId { get; set; }
         
         [JsonProperty("ip")]
