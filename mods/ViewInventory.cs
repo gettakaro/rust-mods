@@ -4,7 +4,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins;
 
-[Info("ViewInventory", "Strobez", "0.0.1")]
+[Info("ViewInventory", "Takaro", "0.0.1")]
 internal class ViewInventory : RustPlugin
 {
     [ConsoleCommand("viewinventory")]

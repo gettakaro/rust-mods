@@ -3,7 +3,7 @@ using System;
 
 namespace Oxide.Plugins;
 
-[Info("TeleportPlayer", "Strobez", "0.0.1")]
+[Info("TeleportPlayer", "Takaro", "0.0.1")]
 internal class TeleportPlayer : RustPlugin
 {
     private readonly float _teleportHeight = 1000f;

@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("Hook Parser", "Strobez", "0.0.1")]
+[Info("Hook Parser", "Takaro", "0.0.1")]
 internal class HookParser : RustPlugin
 {
     #region Oxide Hooks
@@ -45,20 +45,44 @@ internal class HookParser : RustPlugin
 
     private void OnPlayerDeath(BasePlayer player, HitInfo? info)
     {
-        if (player == null || info == null) return;
+        if (player == null) return;
 
-        BasePlayer attacker = info.InitiatorPlayer;
-        if (attacker == null) return;
-
-        Hook hook = new(Type.PLAYER_DEATH, new PlayerDeath
+        if (info == null)
         {
-            Player = GetTakaroPlayer(player),
-            Attacker = GetTakaroPlayer(attacker),
-            Position = player.transform.position,
-            Weapon = info.WeaponPrefab.ShortPrefabName ?? "Unknown"
-        });
+            Hook hook = new(Type.PLAYER_DEATH, new PlayerDeath
+            {
+                Player = GetTakaroPlayer(player),
+                Position = player.transform.position,
+            });
+            LogParsedJson(hook);
 
-        LogParsedJson(hook);
+        }
+        else
+        {
+            BasePlayer attacker = info.InitiatorPlayer;
+            if (attacker == null)
+            {
+                Hook hook = new(Type.PLAYER_DEATH, new PlayerDeath
+                {
+                    Player = GetTakaroPlayer(player),
+                    Position = player.transform.position,
+                });
+                LogParsedJson(hook);
+            }
+            else
+            {
+                Hook hook = new(Type.PLAYER_DEATH, new PlayerDeath
+                {
+                    Player = GetTakaroPlayer(player),
+                    Attacker = GetTakaroPlayer(attacker),
+                    Position = player.transform.position,
+                    Weapon = info.WeaponPrefab.ShortPrefabName ?? "Unknown"
+                });
+                LogParsedJson(hook);
+            }
+
+        }
+
     }
 
     private void OnEntityDeath(BaseCombatEntity entity, HitInfo? info)
@@ -81,19 +105,19 @@ internal class HookParser : RustPlugin
     }
 
     #endregion
-    
+
     #region Helpers
     private TakaroPlayer GetTakaroPlayer(BasePlayer player)
     {
         return new()
         {
             Name = player.displayName,
-            SteamId = player.userID,
+            SteamId = player.userID.ToString(),
             Ip = player.net.connection.ipaddress,
             Ping = Network.Net.sv.GetAveragePing(player.net.connection)
         };
     }
-    
+
     private void LogParsedJson(Hook hook)
     {
         string stringifyJson = JsonConvert.SerializeObject(hook, Formatting.None);
@@ -115,17 +139,17 @@ internal class HookParser : RustPlugin
     {
         [JsonProperty("name")]
         public string? Name { get; set; }
-        
+
         [JsonProperty("steamId")]
         public string SteamId { get; set; }
-        
+
         [JsonProperty("ip")]
         public string? Ip { get; set; }
-        
+
         [JsonProperty("ping")]
         public int Ping { get; set; }
     }
-    
+
     private class Hook
     {
         [JsonProperty("type")]
@@ -133,7 +157,7 @@ internal class HookParser : RustPlugin
 
         [JsonProperty("data")]
         public object Data { get; set; }
-        
+
         public Hook(Type type, object data)
         {
             Type = type;
@@ -175,7 +199,7 @@ internal class HookParser : RustPlugin
 
         [JsonProperty("position")]
         public Vector3 Position { get; set; }
-        
+
         [JsonProperty("weapon")]
         public string? Weapon { get; set; }
     }
