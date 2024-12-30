@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Linq;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
@@ -32,7 +33,12 @@ internal class ViewInventory : RustPlugin
             return;
         }
 
-        string inventoryJson = ConvertItemsToJson(player.inventory.containerMain.itemList);
+        string inventoryJson = ConvertItemsToJson(
+            player.inventory.containerMain.itemList
+                .Concat(player.inventory.containerBelt.itemList)
+                .Concat(player.inventory.containerWear.itemList)
+                .ToList()
+        );
 
         CmdResponse response = new(player.displayName, player.UserIDString, player.net.ID.ToString(), inventoryJson);
 
