@@ -4,7 +4,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins;
 
-[Info("ViewInventory", "Takaro", "0.0.1")]
+[Info("ViewInventory", "Takaro", "0.0.2")]
 internal class ViewInventory : RustPlugin
 {
     [ConsoleCommand("viewinventory")]
@@ -32,7 +32,7 @@ internal class ViewInventory : RustPlugin
             return;
         }
 
-        string inventoryJson = ConvertItemsToJson(player.inventory.AllItems());
+        string inventoryJson = ConvertItemsToJson(player.inventory.containerMain.itemList);
 
         CmdResponse response = new(player.displayName, player.UserIDString, player.net.ID.ToString(), inventoryJson);
 

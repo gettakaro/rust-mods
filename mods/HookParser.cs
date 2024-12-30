@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins;
 
-[Info("Hook Parser", "Takaro", "0.0.1")]
+[Info("Hook Parser", "Takaro", "0.0.2")]
 internal class HookParser : RustPlugin
 {
     #region Oxide Hooks
