@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Shellcheck
-        run: shellcheck scripts/*.sh start.sh
+        run: shellcheck -e SC1091 scripts/*.sh start.sh
 
   compile-check:
     runs-on: ubuntu-latest
@@ -59,15 +59,16 @@ jobs:
           GAME=/tmp/managed-dlls/game
           CARBON=/tmp/carbon/carbon/managed
 
+          # Build reference flags for all DLLs in both directories
+          # This mirrors how Carbon's runtime compiler resolves references
+          REFS=""
+          for dll in "$GAME"/*.dll "$CARBON"/*.dll; do
+            REFS="$REFS -r:$dll"
+          done
+
+          # shellcheck disable=SC2086
           mcs -target:library \
-            -lib:"$GAME" \
-            -lib:"$CARBON" \
-            -r:Assembly-CSharp.dll \
-            -r:Carbon.Common.dll \
-            -r:Newtonsoft.Json.dll \
-            -r:UnityEngine.CoreModule.dll \
-            -r:Facepunch.Network.dll \
-            -r:Facepunch.System.dll \
+            $REFS \
             -out:/dev/null \
             plugin/TakaroConnector.cs
 
