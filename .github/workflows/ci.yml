@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shellcheck
+        run: shellcheck scripts/*.sh start.sh
+
+  compile-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Rust game DLLs
+        uses: actions/cache@v4
+        id: dll-cache
+        with:
+          path: /tmp/managed-dlls/game
+          key: rust-dedicated-managed-v1
+
+      - name: Download Rust server DLLs
+        if: steps.dll-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y lib32gcc-s1
+
+          mkdir -p /tmp/steamcmd
+          curl -sL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz \
+            | tar -xzf - -C /tmp/steamcmd
+
+          /tmp/steamcmd/steamcmd.sh \
+            +force_install_dir /tmp/rust \
+            +login anonymous \
+            +app_update 258550 validate \
+            +quit
+
+          mkdir -p /tmp/managed-dlls/game
+          cp /tmp/rust/RustDedicated_Data/Managed/*.dll /tmp/managed-dlls/game/
+
+      - name: Download Carbon
+        run: |
+          curl -sL https://github.com/CarbonCommunity/Carbon/releases/download/production_build/Carbon.Linux.Release.tar.gz \
+            -o /tmp/carbon.tar.gz
+          mkdir -p /tmp/carbon
+          tar -xzf /tmp/carbon.tar.gz -C /tmp/carbon
+
+      - name: Compile plugin
+        run: |
+          sudo apt-get install -y mono-mcs
+
+          GAME=/tmp/managed-dlls/game
+          CARBON=/tmp/carbon/carbon/managed
+
+          mcs -target:library \
+            -lib:"$GAME" \
+            -lib:"$CARBON" \
+            -r:Assembly-CSharp.dll \
+            -r:Carbon.Common.dll \
+            -r:Newtonsoft.Json.dll \
+            -r:UnityEngine.CoreModule.dll \
+            -r:Facepunch.Network.dll \
+            -r:Facepunch.System.dll \
+            -out:/dev/null \
+            plugin/TakaroConnector.cs
+
+  docker-build:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t takaro-rust-test .
