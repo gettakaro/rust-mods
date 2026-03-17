@@ -58,16 +58,16 @@ jobs:
           CARBON=/tmp/carbon/carbon/managed
 
           # Set up a temporary dotnet project for compilation.
-          # Uses Roslyn (dotnet build) instead of Mono's mcs because:
-          # - Game DLLs target netstandard2.1
-          # - Carbon publicizes internal game members at runtime,
-          #   so we use IgnoresAccessChecksTo to match that behavior
+          # Uses Roslyn (dotnet build) instead of Mono's mcs because
+          # game DLLs target netstandard2.1.
+          # Carbon publicizes internal game members at runtime, so we use
+          # IgnoresAccessChecksTo to match that behavior.
           mkdir -p /tmp/compile-check/src
 
           cp plugin/TakaroConnector.cs /tmp/compile-check/src/
 
-          # Define IgnoresAccessChecksTo attribute (standard .NET pattern
-          # for bypassing internal access — matches Carbon's runtime behavior)
+          # Define IgnoresAccessChecksTo attribute (Roslyn recognizes this
+          # to bypass internal access checks — matches Carbon's runtime behavior)
           cat > /tmp/compile-check/src/IgnoreAccessChecks.cs << 'CSEOF'
           using System;
           using System.Runtime.CompilerServices;
@@ -82,9 +82,17 @@ jobs:
           }
           CSEOF
 
-          # Build reference XML for .csproj
+          # Only reference game-specific DLLs (skip System.*/mscorlib/netstandard
+          # — the .NET SDK provides those via netstandard2.1 target framework)
           REFS=""
-          for dll in "$GAME"/*.dll "$CARBON"/*.dll; do
+          for dll in "$GAME"/*.dll; do
+            name=$(basename "$dll" .dll)
+            case "$name" in
+              System.*|mscorlib|netstandard|Microsoft.*) continue ;;
+            esac
+            REFS="$REFS<Reference Include=\"$name\"><HintPath>$dll</HintPath></Reference>"
+          done
+          for dll in "$CARBON"/*.dll; do
             name=$(basename "$dll" .dll)
             REFS="$REFS<Reference Include=\"$name\"><HintPath>$dll</HintPath></Reference>"
           done
@@ -96,7 +104,6 @@ jobs:
               <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
               <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
               <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-              <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
               <NoWarn>CS1685</NoWarn>
             </PropertyGroup>
             <ItemGroup>
