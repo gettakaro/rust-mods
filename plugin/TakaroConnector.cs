@@ -35,6 +35,7 @@ namespace Oxide.Plugins
         private long _currentReconnectDelay = InitialReconnectDelay;
         private volatile bool _connected;
         private readonly object _sendLock = new object();
+        private readonly Dictionary<string, Vector3> _lastPosition = new Dictionary<string, Vector3>();
 
         // --- Lifecycle ---
 
@@ -52,7 +53,11 @@ namespace Oxide.Plugins
             }
 
             Subscribe("OnPlayerConnected");
+            Subscribe("OnPlayerDisconnected");
             Subscribe("OnPlayerChat");
+            Subscribe("OnPlayerDeath");
+            Subscribe("OnEntityDeath");
+            Subscribe("OnServerMessage");
 
             LogInfo($"Connecting to {_wsUrl}");
             StartConnection();
@@ -64,6 +69,7 @@ namespace Oxide.Plugins
             _connected = false;
             _cts?.Cancel();
             try { _ws?.Dispose(); } catch { }
+            _lastPosition.Clear();
         }
 
         // --- WebSocket Connection ---
@@ -469,15 +475,30 @@ namespace Oxide.Plugins
         {
             var gameId = args.Value<string>("gameId");
             var player = FindPlayerByGameId(gameId);
-            if (player == null) return JValue.CreateNull();
 
-            var pos = player.transform.position;
-            return new JObject
+            if (player != null)
             {
-                ["x"] = pos.x,
-                ["y"] = pos.y,
-                ["z"] = pos.z
-            };
+                var pos = player.transform.position;
+                _lastPosition[gameId] = pos;
+                return new JObject
+                {
+                    ["x"] = pos.x,
+                    ["y"] = pos.y,
+                    ["z"] = pos.z
+                };
+            }
+
+            if (_lastPosition.TryGetValue(gameId, out var cached))
+            {
+                return new JObject
+                {
+                    ["x"] = cached.x,
+                    ["y"] = cached.y,
+                    ["z"] = cached.z
+                };
+            }
+
+            return new JObject { ["x"] = 0, ["y"] = 0, ["z"] = 0 };
         }
 
         private JToken HandleGetPlayerInventory(JObject args)
@@ -710,7 +731,7 @@ namespace Oxide.Plugins
                         ["name"] = ban.username ?? ""
                     },
                     ["reason"] = ban.notes ?? "",
-                    ["expiresAt"] = ""
+                    ["expiresAt"] = null
                 });
             }
             return arr;
@@ -727,6 +748,8 @@ namespace Oxide.Plugins
         {
             if (player == null) return;
 
+            _lastPosition[player.UserIDString] = player.transform.position;
+
             var data = new JObject
             {
                 ["player"] = PlayerToJson(player)
@@ -737,6 +760,8 @@ namespace Oxide.Plugins
         private void OnPlayerDisconnected(BasePlayer player, string reason)
         {
             if (player == null) return;
+
+            _lastPosition[player.UserIDString] = player.transform.position;
 
             var data = new JObject
             {
@@ -782,11 +807,6 @@ namespace Oxide.Plugins
                 ["z"] = pos.z
             };
 
-            var weapon = info?.Weapon?.GetItem()?.info?.shortname
-                         ?? info?.WeaponPrefab?.ShortPrefabName
-                         ?? "";
-            data["weapon"] = weapon;
-
             SendGameEvent("player-death", data);
         }
 
@@ -797,13 +817,14 @@ namespace Oxide.Plugins
             var attacker = info?.InitiatorPlayer;
             if (attacker == null) return;
 
+            var weapon = info?.Weapon?.GetItem()?.info?.shortname
+                         ?? info?.WeaponPrefab?.ShortPrefabName
+                         ?? "";
             var data = new JObject
             {
                 ["player"] = PlayerToJson(attacker),
                 ["entity"] = entity.ShortPrefabName ?? entity.GetType().Name,
-                ["weapon"] = info?.Weapon?.GetItem()?.info?.shortname
-                             ?? info?.WeaponPrefab?.ShortPrefabName
-                             ?? ""
+                ["weapon"] = weapon
             };
             SendGameEvent("entity-killed", data);
         }
