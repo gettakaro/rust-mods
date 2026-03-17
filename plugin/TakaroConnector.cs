@@ -460,7 +460,7 @@ namespace Oxide.Plugins
         {
             var gameId = args.Value<string>("gameId");
             var player = FindPlayerByGameId(gameId);
-            return player != null ? PlayerToJson(player) : JValue.CreateNull();
+            return player != null ? (JToken)PlayerToJson(player) : JValue.CreateNull();
         }
 
         private JToken HandleGetPlayers()

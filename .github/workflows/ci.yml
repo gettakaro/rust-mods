@@ -54,23 +54,58 @@ jobs:
 
       - name: Compile plugin
         run: |
-          sudo apt-get install -y mono-mcs
-
           GAME=/tmp/managed-dlls/game
           CARBON=/tmp/carbon/carbon/managed
 
-          # Reference all game + Carbon DLLs. Use -nostdlib to prevent
-          # Mono's own mscorlib from conflicting with the game's runtime.
+          # Set up a temporary dotnet project for compilation.
+          # Uses Roslyn (dotnet build) instead of Mono's mcs because:
+          # - Game DLLs target netstandard2.1
+          # - Carbon publicizes internal game members at runtime,
+          #   so we use IgnoresAccessChecksTo to match that behavior
+          mkdir -p /tmp/compile-check/src
+
+          cp plugin/TakaroConnector.cs /tmp/compile-check/src/
+
+          # Define IgnoresAccessChecksTo attribute (standard .NET pattern
+          # for bypassing internal access — matches Carbon's runtime behavior)
+          cat > /tmp/compile-check/src/IgnoreAccessChecks.cs << 'CSEOF'
+          using System;
+          using System.Runtime.CompilerServices;
+          [assembly: IgnoresAccessChecksTo("Assembly-CSharp")]
+          namespace System.Runtime.CompilerServices
+          {
+              [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+              internal class IgnoresAccessChecksToAttribute : Attribute
+              {
+                  public IgnoresAccessChecksToAttribute(string assemblyName) { }
+              }
+          }
+          CSEOF
+
+          # Build reference XML for .csproj
           REFS=""
           for dll in "$GAME"/*.dll "$CARBON"/*.dll; do
-            REFS="$REFS -r:$dll"
+            name=$(basename "$dll" .dll)
+            REFS="$REFS<Reference Include=\"$name\"><HintPath>$dll</HintPath></Reference>"
           done
 
-          # shellcheck disable=SC2086
-          mcs -target:library -nostdlib \
-            $REFS \
-            -out:/dev/null \
-            plugin/TakaroConnector.cs
+          cat > /tmp/compile-check/compile-check.csproj << PROJ
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>netstandard2.1</TargetFramework>
+              <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+              <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+              <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+              <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+              <NoWarn>CS1685</NoWarn>
+            </PropertyGroup>
+            <ItemGroup>
+              $REFS
+            </ItemGroup>
+          </Project>
+          PROJ
+
+          dotnet build /tmp/compile-check/compile-check.csproj
 
   docker-build:
     if: github.event_name == 'pull_request'
