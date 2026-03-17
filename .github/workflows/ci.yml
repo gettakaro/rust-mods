@@ -58,43 +58,26 @@ jobs:
           CARBON=/tmp/carbon/carbon/managed
 
           # Set up a temporary dotnet project for compilation.
-          # Uses Roslyn (dotnet build) instead of Mono's mcs because
-          # game DLLs target netstandard2.1.
-          # Carbon publicizes internal game members at runtime, so we use
-          # IgnoresAccessChecksTo to match that behavior.
+          # Uses Roslyn via dotnet build because game DLLs target netstandard2.1.
+          # Carbon publicizes all game DLL members at runtime using Mono.Cecil,
+          # so we use BepInEx.AssemblyPublicizer to match that behavior.
           mkdir -p /tmp/compile-check/src
 
           cp plugin/TakaroConnector.cs /tmp/compile-check/src/
 
-          # Define IgnoresAccessChecksTo attribute (Roslyn recognizes this
-          # to bypass internal access checks — matches Carbon's runtime behavior)
-          cat > /tmp/compile-check/src/IgnoreAccessChecks.cs << 'CSEOF'
-          using System;
-          using System.Runtime.CompilerServices;
-          [assembly: IgnoresAccessChecksTo("Assembly-CSharp")]
-          namespace System.Runtime.CompilerServices
-          {
-              [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
-              internal class IgnoresAccessChecksToAttribute : Attribute
-              {
-                  public IgnoresAccessChecksToAttribute(string assemblyName) { }
-              }
-          }
-          CSEOF
-
-          # Only reference game-specific DLLs (skip System.*/mscorlib/netstandard
-          # — the .NET SDK provides those via netstandard2.1 target framework)
-          REFS=""
+          # Build reference XML for .csproj (skip system DLLs — SDK provides those)
+          GAME_REFS=""
           for dll in "$GAME"/*.dll; do
             name=$(basename "$dll" .dll)
             case "$name" in
               System.*|mscorlib|netstandard|Microsoft.*) continue ;;
             esac
-            REFS="$REFS<Reference Include=\"$name\"><HintPath>$dll</HintPath></Reference>"
+            GAME_REFS="$GAME_REFS<Reference Include=\"$name\" HintPath=\"$dll\" Publicize=\"true\" />"
           done
+          CARBON_REFS=""
           for dll in "$CARBON"/*.dll; do
             name=$(basename "$dll" .dll)
-            REFS="$REFS<Reference Include=\"$name\"><HintPath>$dll</HintPath></Reference>"
+            CARBON_REFS="$CARBON_REFS<Reference Include=\"$name\" HintPath=\"$dll\" />"
           done
 
           cat > /tmp/compile-check/compile-check.csproj << PROJ
@@ -107,7 +90,9 @@ jobs:
               <NoWarn>CS1685</NoWarn>
             </PropertyGroup>
             <ItemGroup>
-              $REFS
+              <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.2" PrivateAssets="all" />
+              $GAME_REFS
+              $CARBON_REFS
             </ItemGroup>
           </Project>
           PROJ
