@@ -59,10 +59,17 @@ jobs:
           GAME=/tmp/managed-dlls/game
           CARBON=/tmp/carbon/carbon/managed
 
-          # Build reference flags for all DLLs in both directories
-          # This mirrors how Carbon's runtime compiler resolves references
+          # Reference game-specific DLLs (skip System.*/mscorlib/netstandard
+          # which conflict with Mono's own standard library)
           REFS=""
-          for dll in "$GAME"/*.dll "$CARBON"/*.dll; do
+          for dll in "$GAME"/*.dll; do
+            name=$(basename "$dll")
+            case "$name" in
+              System.*|mscorlib.*|netstandard.*|Microsoft.*) continue ;;
+            esac
+            REFS="$REFS -r:$dll"
+          done
+          for dll in "$CARBON"/*.dll; do
             REFS="$REFS -r:$dll"
           done
 
