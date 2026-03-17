@@ -59,22 +59,15 @@ jobs:
           GAME=/tmp/managed-dlls/game
           CARBON=/tmp/carbon/carbon/managed
 
-          # Reference game-specific DLLs (skip System.*/mscorlib/netstandard
-          # which conflict with Mono's own standard library)
+          # Reference all game + Carbon DLLs. Use -nostdlib to prevent
+          # Mono's own mscorlib from conflicting with the game's runtime.
           REFS=""
-          for dll in "$GAME"/*.dll; do
-            name=$(basename "$dll")
-            case "$name" in
-              System.*|mscorlib.*|netstandard.*|Microsoft.*) continue ;;
-            esac
-            REFS="$REFS -r:$dll"
-          done
-          for dll in "$CARBON"/*.dll; do
+          for dll in "$GAME"/*.dll "$CARBON"/*.dll; do
             REFS="$REFS -r:$dll"
           done
 
           # shellcheck disable=SC2086
-          mcs -target:library \
+          mcs -target:library -nostdlib \
             $REFS \
             -out:/dev/null \
             plugin/TakaroConnector.cs
