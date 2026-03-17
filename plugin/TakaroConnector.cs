@@ -51,6 +51,9 @@ namespace Oxide.Plugins
                 return;
             }
 
+            Subscribe("OnPlayerConnected");
+            Subscribe("OnPlayerChat");
+
             LogInfo($"Connecting to {_wsUrl}");
             StartConnection();
         }
@@ -157,12 +160,6 @@ namespace Oxide.Plugins
                     HandleIdentifyResponse(json);
                     break;
 
-                case "authenticated":
-                    _connected = true;
-                    LogInfo("Authentication confirmed");
-                    _currentReconnectDelay = InitialReconnectDelay;
-                    break;
-
                 case "request":
                     HandleRequest(json);
                     break;
@@ -263,13 +260,15 @@ namespace Oxide.Plugins
                 return;
             }
 
+            _connected = true;
             _currentReconnectDelay = InitialReconnectDelay;
 
-            var serverId = payload["server"]?.Value<string>("id");
+            var serverId = payload["gameServerId"]?.Value<string>()
+                           ?? payload["server"]?.Value<string>("id");
             if (serverId != null)
-                LogInfo($"Identified successfully, server ID: {serverId}");
+                LogInfo($"Identified and connected, server ID: {serverId}");
             else
-                LogInfo("Identified successfully");
+                LogInfo("Identified and connected");
         }
 
         private void SendResponse(string requestId, JToken payload, string error)
@@ -741,11 +740,7 @@ namespace Oxide.Plugins
 
             var data = new JObject
             {
-                ["player"] = new JObject
-                {
-                    ["gameId"] = player.UserIDString,
-                    ["name"] = player.displayName
-                }
+                ["player"] = PlayerToJson(player)
             };
             SendGameEvent("player-disconnected", data);
         }
@@ -756,12 +751,8 @@ namespace Oxide.Plugins
 
             var data = new JObject
             {
-                ["player"] = new JObject
-                {
-                    ["gameId"] = player.UserIDString,
-                    ["name"] = player.displayName
-                },
-                ["channel"] = channel.ToString(),
+                ["player"] = PlayerToJson(player),
+                ["channel"] = channel.ToString().ToLower(),
                 ["msg"] = message
             };
             SendGameEvent("chat-message", data);
@@ -774,21 +765,13 @@ namespace Oxide.Plugins
 
             var data = new JObject
             {
-                ["player"] = new JObject
-                {
-                    ["gameId"] = player.UserIDString,
-                    ["name"] = player.displayName
-                }
+                ["player"] = PlayerToJson(player)
             };
 
             var attacker = info?.InitiatorPlayer;
             if (attacker != null && attacker != player)
             {
-                data["attacker"] = new JObject
-                {
-                    ["gameId"] = attacker.UserIDString,
-                    ["name"] = attacker.displayName
-                };
+                data["attacker"] = PlayerToJson(attacker);
             }
 
             var pos = player.transform.position;
@@ -816,11 +799,7 @@ namespace Oxide.Plugins
 
             var data = new JObject
             {
-                ["player"] = new JObject
-                {
-                    ["gameId"] = attacker.UserIDString,
-                    ["name"] = attacker.displayName
-                },
+                ["player"] = PlayerToJson(attacker),
                 ["entity"] = entity.ShortPrefabName ?? entity.GetType().Name,
                 ["weapon"] = info?.Weapon?.GetItem()?.info?.shortname
                              ?? info?.WeaponPrefab?.ShortPrefabName
@@ -829,7 +808,7 @@ namespace Oxide.Plugins
             SendGameEvent("entity-killed", data);
         }
 
-        private void OnServerMessage(string message, string stacktrace)
+        private void OnServerMessage(string message, string username, string color, ulong userid)
         {
             if (string.IsNullOrEmpty(message)) return;
             if (message.StartsWith("%.") || message.StartsWith("[event]")) return;
