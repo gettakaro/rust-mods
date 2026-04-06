@@ -45,9 +45,15 @@ jobs:
           git config user.email \
             "github-actions[bot]@users.noreply.github.com"
           git add plugin/TakaroConnector.cs
-          git commit -m "release: v$VERSION"
-          git tag "v$VERSION"
-          git push origin HEAD "v$VERSION"
+          if git diff --cached --quiet; then
+            echo "Version already up to date, tagging current commit"
+            git tag "v$VERSION"
+            git push origin "v$VERSION"
+          else
+            git commit -m "release: v$VERSION"
+            git tag "v$VERSION"
+            git push origin HEAD "v$VERSION"
+          fi
           gh release create "v$VERSION" \
             plugin/TakaroConnector.cs \
             --title "TakaroConnector v$VERSION" \
