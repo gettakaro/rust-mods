@@ -1,73 +1,45 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g. 1.2.0)'
-        required: true
-        type: string
+  push:
+    branches: [main]
 
 jobs:
-  bump-and-validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate version format
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Invalid version format: '$VERSION'"
-            echo "Expected semver format: X.Y.Z (e.g. 1.2.0)"
-            exit 1
-          fi
-      - name: Check tag does not exist
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "::error::Tag v$VERSION already exists"
-            exit 1
-          fi
-      - name: Bump version in plugin
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          OLD='\[Info("TakaroConnector", "Takaro", "[^"]*")\]'
-          NEW="[Info(\"TakaroConnector\", \"Takaro\", \"$VERSION\")]"
-          sed -i "s/$OLD/$NEW/" plugin/TakaroConnector.cs
-          grep -q "\[Info(\"TakaroConnector\", \"Takaro\", \"$VERSION\")\]" \
-            plugin/TakaroConnector.cs || {
-            echo "::error::Failed to update version"
-            exit 1
-          }
-      - name: Upload bumped plugin
-        uses: actions/upload-artifact@v4
-        with:
-          name: plugin-source
-          path: plugin/TakaroConnector.cs
-
-  ci:
-    needs: [bump-and-validate]
-    uses: ./.github/workflows/ci.yml
-
   release:
-    needs: [ci]
+    # Skip commits made by this workflow (version bumps)
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Download bumped plugin
-        uses: actions/download-artifact@v4
         with:
-          name: plugin-source
-          path: plugin/
+          fetch-depth: 0
+      - name: Compute next version
+        id: version
+        run: |
+          LATEST=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$LATEST" ]; then
+            NEXT="1.0.0"
+          else
+            # Strip v prefix, increment patch
+            BASE="${LATEST#v}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
+            NEXT="$MAJOR.$MINOR.$((PATCH + 1))"
+          fi
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Next version: $NEXT"
+      - name: Update plugin version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          OLD='\[Info("TakaroConnector", "Takaro", "[^"]*")\]'
+          NEW="[Info(\"TakaroConnector\", \"Takaro\", \"$VERSION\")]"
+          sed -i "s/$OLD/$NEW/" plugin/TakaroConnector.cs
       - name: Commit, tag, and release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email \
